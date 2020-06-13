@@ -1,0 +1,4 @@
+RewriteEngine On
+
+RewriteRule ^login/?$ login.php
+RewriteRule ^account/?$ account.php
