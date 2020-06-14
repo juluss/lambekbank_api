@@ -3,27 +3,25 @@ include("functions.php");
 
 $requestMethod = $_SERVER["REQUEST_METHOD"];
 $headers = getallheaders();
-
-print_r($headers);
 $token = explode(" ",$headers['Authorization'])[1];
 
 
-//first of all we check if the token is valid;
-$decoded = JWT::decode($token, "prout", array('HS256'));
-$decoded = (array) $decoded;
 
-if( time() > $decoded["exp"] ) {
-	print "token expired";
+//First of all we check if the token exists in the DB (meaning it was issued by us)
+if( !isTokenValid( $token ) ) {
+	header("HTTP/1.0 403 Forbidden");
 	exit();
 }
 
-print_r($decoded);
+
+$decoded = JWT::decode($token, $tokenPrivateKey, array('HS256'));
+$decoded = (array) $decoded;
+
 
 
 //////
-
 if( $requestMethod == "GET" ) {
-	getAccountForUser( $decoded["userId"] );
+	print(json_encode(getAccountsForUser( $decoded["userId"] )));
 
 }
 
@@ -34,10 +32,20 @@ else {
 
 
 
-function getAccountForUser( $userId ) {
+function getLastTransactions( $account, $number ) {
 	global $bdd;
 
-	print "accounts for " . $userId;
+	$req = $bdd->prepare('SELECT * FROM transactions WHERE account_id=? ORDER BY id DESC LIMIT ?');
+	$req->bind_param("ii", $account, $number);
+	$req->execute();
+
+	$result = $req->get_result();
+	$lastTransactions = $result->fetch_all(MYSQLI_ASSOC);
+	return $lastTransactions;
+}
+
+function getAccountsForUser( $userId ) {
+	global $bdd;
 
 	// first we search for all accounts
 	$req = $bdd->prepare('SELECT id, name FROM accounts WHERE user_id = ?');
@@ -48,16 +56,12 @@ function getAccountForUser( $userId ) {
 	$result = $req->get_result();
 	$userAccounts = $result->fetch_all(MYSQLI_ASSOC);
 
-	print_r($userAccounts);
+	$return = array();
 
 	//then for each account we are going to search for the last transaction
-	// $req = bdd->prepare('SELECT * FROM transactions WHERE account_id=? ORDER BY id DESC LIMIT 1');
-	// $req->bind_param("i", $accountId);
-	// $req->execute();
-	//
-	// $result = $req->get_result();
-	// $lastTransaction = $result->fetch_all(MYSQLI_ASSOC);
-
-
+	foreach($userAccounts as $key=>$account) {
+		$userAccounts[$key]['balance'] = getLastTransactions($account['id'], 1)[0]['accountBalance'];
+	}
+	return $userAccounts;
 }
 ?>

@@ -31,8 +31,10 @@ else {
 
 function login($username=null, $password=null) {
 
-	//get infos in DATABASE
+	global $tokenPrivateKey;
 	global $bdd;
+
+	//get infos in DATABASE
 	$req = $bdd->prepare('SELECT id, username, password FROM users WHERE username = ?');
 	$req->bind_param( "s", $username );
 	$req->execute();
@@ -49,35 +51,36 @@ function login($username=null, $password=null) {
 
 		if( password_verify( $password, $userFromDB['password']) ) {
 
-			$return["success"] = 1;
-			$return["username"] = $username;
-
 			// preparing TOKEN
-			$key = "prout";
 			$payload = array(
 				"userId" => $userFromDB['id'],
 				"exp" => time() + 3600,
 			);
-			$jwt = JWT::encode($payload, $key);
+			$jwt = JWT::encode($payload, $tokenPrivateKey);
 
+			// pushing the token in DATABASE
+			$req = $bdd->prepare('INSERT into tokens VALUES (NULL, ?)');
+			$req->bind_param( "s", $jwt );
+			$req->execute();
+			if( $req->sqlstate != "00000" ) {
+				exit();
+			}
+
+			$return["success"] = 1;
+			$return["username"] = $username;
 			$return['token'] = $jwt;
-
-			return $return;
 
 		}
 		else {
 			$return["success"] = 0;
-			return $return;
 		}
 	}
 
 	else {
 		$return["success"] = 0;
-		return $return;
 	}
 
-
-
+	return $return;
 }
 
 ?>
